@@ -1,0 +1,35 @@
+name: Check snake
+on: [push, pull_request]
+jobs:
+  unix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: make
+      - name: Launch in a terminal and quit
+        run: |
+          python3 - <<'PY'
+          import os, pty, select, subprocess, termios
+          master, slave = pty.openpty()
+          original = termios.tcgetattr(slave)
+          with subprocess.Popen(["./snake"], stdin=slave, stdout=slave, stderr=slave) as game:
+              try:
+                  screen = b""
+                  while b"GitHub @42Maxime" not in screen:
+                      assert select.select([master], [], [], 5)[0], "No game screen"
+                      screen += os.read(master, 4096)
+                  os.write(master, b"wx")
+                  assert game.wait(timeout=5) == 0
+                  assert termios.tcgetattr(slave) == original
+              finally:
+                  if game.poll() is None:
+                      game.kill()
+          PY
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gcc -std=c99 -Wall -Wextra -Werror snake.c move.c draw.c error.c terminal_win.c -o snake.exe
